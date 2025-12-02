@@ -1,6 +1,9 @@
 import { streamText, UIMessage, convertToModelMessages, stepCountIs } from "ai";
 import { openai } from "@ai-sdk/openai";
-import { supabaseServer } from "@/lib/supabase/server";
+import {
+  supabaseServer,
+  createServerSupabaseClient,
+} from "@/lib/supabase/server";
 import { z } from "zod";
 
 export const maxDuration = 300;
@@ -12,15 +15,54 @@ type Location = {
 };
 
 export async function POST(req: Request) {
+  // Get user session for authentication
+  const supabase = await createServerSupabaseClient();
   const {
-    messages,
-    scoutId,
-    location,
-  }: {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  // Parse request body with error handling
+  let body: {
     messages: UIMessage[];
     scoutId: string;
     location: Location | null;
-  } = await req.json();
+  };
+
+  try {
+    body = await req.json();
+  } catch (e) {
+    console.error("Failed to parse request body:", e);
+    return new Response(JSON.stringify({ error: "Invalid request body" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const { messages, scoutId, location } = body;
+
+  // Verify user owns this scout
+  const { data: scout, error: scoutError } = await supabaseServer
+    .from("scouts")
+    .select("user_id")
+    .eq("id", scoutId)
+    .single();
+
+  if (scoutError || !scout || scout.user_id !== user.id) {
+    return new Response(
+      JSON.stringify({ error: "Scout not found or unauthorized" }),
+      {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  }
 
   // Save user message to database
   if (messages.length > 0) {
@@ -130,7 +172,7 @@ ${currentScout.frequency ? `- Frequency: ${currentScout.frequency}` : "- Frequen
 Be conversational and helpful. When scout is complete, tell user they can modify anything by chatting with you. Never use em dashes (—)`;
 
   const result = streamText({
-    model: openai("gpt-5.1-2025-11-13"),
+    model: openai("gpt-5-mini"),
     messages: convertToModelMessages(messages),
     system: systemPrompt,
     toolChoice: "auto",

@@ -9,6 +9,7 @@ import HeaderWrapper from "./Wrapper/Wrapper";
 import HeaderToggle from "./Toggle/Toggle";
 import HeaderDropdownMobile from "./Dropdown/Mobile/Mobile";
 import HeaderCTA from "./cta/CTA";
+import UserMenu from "./UserMenu/UserMenu";
 
 export default function Header() {
   return (
@@ -35,9 +36,9 @@ export default function Header() {
             <div className="text-black-alpha-16 text-label-medium select-none">
               ·
             </div>
-            <div className="flex gap-8">
+            <div className="flex gap-8 items-center">
               <HeaderGithub />
-              <HeaderCTA />
+              <UserMenu />
             </div>
           </div>
 

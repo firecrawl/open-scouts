@@ -1,7 +1,18 @@
 import { NextResponse } from "next/server";
+import { createServerSupabaseClient, supabaseServer } from "@/lib/supabase/server";
 
 export async function POST(req: Request) {
   try {
+    // Get user session for authentication
+    const supabase = await createServerSupabaseClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { scoutId } = await req.json();
     console.log("[scout/execute] Received scoutId:", scoutId);
 
@@ -9,6 +20,20 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: "scoutId is required" },
         { status: 400 },
+      );
+    }
+
+    // Verify user owns this scout
+    const { data: scout, error: scoutError } = await supabaseServer
+      .from("scouts")
+      .select("user_id")
+      .eq("id", scoutId)
+      .single();
+
+    if (scoutError || !scout || scout.user_id !== user.id) {
+      return NextResponse.json(
+        { error: "Scout not found or unauthorized" },
+        { status: 403 },
       );
     }
 

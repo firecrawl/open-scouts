@@ -12,6 +12,7 @@ import { NAV_ITEMS } from "@/components/shared/header/Nav/Nav";
 import HeaderDropdownMobileItem from "./Item/Item";
 import Link from "next/link";
 import { createWebRoute } from "@/utils/create-web-route";
+import UserMenu from "@/components/shared/header/UserMenu/UserMenu";
 
 export default function HeaderDropdownMobile({
   ctaHref = createWebRoute.auth.signin({ view: "signup" }),
@@ -38,13 +39,7 @@ export default function HeaderDropdownMobile({
 
       <div className="p-24 flex flex-col gap-12 border-b border-border-faint relative -mt-1">
         <HeaderGithub />
-        {ctaContent ? (
-          ctaContent
-        ) : (
-          <Link href={ctaHref}>
-            <Button variant="secondary"> {ctaLabel} </Button>
-          </Link>
-        )}
+        <UserMenu />
 
         <ConnectorToRight className="left-0 -bottom-11" />
         <ConnectorToLeft className="right-0 -bottom-11" />

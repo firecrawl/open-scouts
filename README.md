@@ -12,7 +12,7 @@ Open Scouts is an AI-powered monitoring platform that lets you create "scouts" -
 - **React 19**
 - **TypeScript**
 - **Tailwind CSS v4**
-- **Supabase** (Database + Edge Functions)
+- **Supabase** (Database + Auth + Edge Functions)
 - **pgvector** (Vector embeddings for semantic search)
 - **Firecrawl SDK** (@mendable/firecrawl-js)
 - **OpenAI API** (AI Agent + Embeddings)
@@ -28,6 +28,7 @@ Open Scouts is an AI-powered monitoring platform that lets you create "scouts" -
 - OpenAI API key ([platform.openai.com](https://platform.openai.com))
 - Firecrawl API key ([firecrawl.dev](https://firecrawl.dev))
 - Resend API key ([resend.com](https://resend.com)) - for email notifications
+- Google Cloud Console account (for Google OAuth - optional)
 
 ### 1. Clone and Install
 
@@ -73,13 +74,45 @@ bun run setup:db  # or: npm run setup:db / pnpm run setup:db
 
 This will:
 - Create all required tables (`scouts`, `scout_executions`, `scout_execution_steps`, etc.)
+- Add user authentication support (user_id columns, Row Level Security)
 - Enable real-time subscriptions
 - Set up vector embeddings for AI-generated execution summaries
-- Set up the cron job for automatic scout execution (runs hourly)
+- Set up the cron job for automatic scout execution (runs every 5 minutes)
 
 **Note:** The setup script will check if the `vector` extension is enabled. If not, follow the instructions to enable it in the Supabase Dashboard before proceeding.
 
-### 6. Deploy Edge Functions
+### 6. Set Up Authentication
+
+Open Scouts uses Supabase Auth for user authentication, supporting both email/password and Google OAuth.
+
+#### Enable Email/Password Auth (Enabled by Default)
+
+1. Go to Supabase Dashboard → **Authentication** → **Providers** → **Email**
+2. Ensure "Enable Email Provider" is toggled on
+3. Configure email templates as needed in **Authentication** → **Email Templates**
+
+#### Enable Google OAuth (Optional but Recommended)
+
+1. **Create Google OAuth Credentials:**
+   - Go to [Google Cloud Console](https://console.cloud.google.com/)
+   - Create a new project or select existing one
+   - Navigate to **APIs & Services** → **Credentials**
+   - Click **Create Credentials** → **OAuth client ID**
+   - Choose "Web application" as Application type
+   - Add authorized JavaScript origins:
+     - `http://localhost:3000` (development)
+     - `https://your-domain.com` (production)
+   - Add authorized redirect URIs:
+     - `https://<your-project-ref>.supabase.co/auth/v1/callback`
+   - Copy the **Client ID** and **Client Secret**
+
+2. **Configure in Supabase:**
+   - Go to Supabase Dashboard → **Authentication** → **Providers** → **Google**
+   - Toggle "Enable Google Provider"
+   - Paste your Client ID and Client Secret
+   - Save
+
+### 7. Deploy Edge Functions
 
 Deploy the scout execution agent and email functions to Supabase Cloud:
 
@@ -104,7 +137,7 @@ npx supabase secrets set RESEND_API_KEY=re_...
 
 **Note:** The RESEND_API_KEY is optional. If not set, scouts will still run but email notifications will be skipped.
 
-### 7. Set Up Resend (Email Notifications)
+### 8. Set Up Resend (Email Notifications)
 
 To enable email notifications when scouts find results:
 
@@ -125,7 +158,7 @@ To enable email notifications when scouts find results:
 2. Click **Send Test Email** to verify the configuration
 3. Check your inbox for the test email
 
-### 8. Run the Development Server
+### 9. Run the Development Server
 
 ```bash
 bun run dev  # or: npm run dev / pnpm run dev
@@ -135,13 +168,21 @@ Open [http://localhost:3000](http://localhost:3000) to see the app.
 
 ## How It Works
 
+### User Authentication Flow
+
+1. **Public Home Page**: Users can browse the landing page without signing in
+2. **Create Scout**: When a user types a query and hits Enter, they're prompted to sign in
+3. **Sign In/Sign Up**: Users can authenticate via email/password or Google OAuth
+4. **Continue Flow**: After authentication, the scout creation continues automatically
+5. **User Isolation**: Each user only sees and manages their own scouts
+
 ### Scout System
 
 1. **Create a Scout**: Define what you want to monitor (e.g., "Scout for any recent Indian restaurants near me" or "Scout for any AI news")
 2. **AI Agent Setup**: The system automatically configures search queries and strategies
 3. **Set Frequency**: Choose how often to run (hourly, every 3 days, weekly)
 4. **Configure Notifications**: Add your email in Settings to receive alerts when scouts find results
-5. **Continuous Monitoring**: The cron job runs every hour and executes active scouts
+5. **Continuous Monitoring**: The cron job runs every 5 minutes and executes active scouts
 6. **AI Summaries**: Each successful execution generates a concise one-sentence summary with semantic embeddings
 7. **Get Notified**: Receive email alerts when scouts find new results (if email is configured)
 8. **View Results**: See all findings with AI-generated summaries in real-time on the scout page
@@ -167,10 +208,18 @@ When scouts find results, you'll automatically receive email alerts:
 
 - **Frontend**: Next.js app with real-time updates via Supabase Realtime
 - **Database**: PostgreSQL (Supabase) with pg_cron for scheduling and pgvector for semantic search
+- **Authentication**: Supabase Auth (Email/Password + Google OAuth)
 - **AI Agent**: OpenAI GPT-4 with function calling (search & scrape tools)
 - **AI Summaries**: Auto-generated one-sentence summaries with vector embeddings for each successful execution
 - **Edge Function**: Deno-based serverless function that orchestrates agent execution
 - **Web Scraping**: Firecrawl API for search and content extraction
+
+## Security
+
+- **Row Level Security (RLS)**: All database tables have RLS policies ensuring users can only access their own data
+- **User Isolation**: Scouts, messages, and executions are all tied to authenticated users
+- **Secure Auth Flow**: OAuth tokens and sessions are managed by Supabase Auth
+- **Service Role**: Server-side operations (cron jobs, edge functions) use service role for privileged access
 
 ## Build for Production
 
@@ -178,6 +227,10 @@ When scouts find results, you'll automatically receive email alerts:
 bun run build  # or: npm run build / pnpm run build
 bun start      # or: npm start / pnpm start
 ```
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 

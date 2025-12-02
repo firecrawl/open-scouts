@@ -41,7 +41,7 @@ yarn-error.log*
 certificates
 
 .env
-.env.*
+
 post_migrator.py
 
 # Server

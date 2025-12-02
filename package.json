@@ -43,6 +43,7 @@
     "@react-aria/datepicker": "^3.10.1",
     "@react-stately/datepicker": "^3.9.4",
     "@remixicon/react": "^4.2.0",
+    "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.81.0",
     "@tabler/icons-react": "^3.0.1",
     "@tailwindcss/typography": "^0.5.13",

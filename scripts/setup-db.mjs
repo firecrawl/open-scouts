@@ -25,7 +25,8 @@ async function runMigrations() {
     console.log('🚀 Running database setup...\n');
 
     const migrations = [
-      'supabase/migrations/00000000000000_initial_schema.sql'
+      'supabase/migrations/00000000000000_initial_schema.sql',
+      'supabase/migrations/00000000000001_add_auth.sql'
     ];
 
     for (const migrationPath of migrations) {
@@ -134,7 +135,22 @@ async function runMigrations() {
       console.log('   Or use the "Run Now" button in the UI for manual execution.\n');
     }
 
-    console.log('🎉 Database setup complete!');
+    console.log('🎉 Database setup complete!\n');
+
+    // Authentication setup instructions
+    console.log('🔐 Authentication Setup');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    console.log('📝 To enable Google OAuth:');
+    console.log('   1. Go to Google Cloud Console: https://console.cloud.google.com/');
+    console.log('   2. Create OAuth 2.0 credentials');
+    console.log('   3. Set authorized redirect URI to:');
+    console.log('      https://<your-project-ref>.supabase.co/auth/v1/callback');
+    console.log('   4. In Supabase Dashboard → Authentication → Providers → Google');
+    console.log('   5. Enable Google and add your Client ID and Secret\n');
+    console.log('📝 To enable Email/Password auth:');
+    console.log('   1. Go to Supabase Dashboard → Authentication → Providers → Email');
+    console.log('   2. Enable Email provider (enabled by default)');
+    console.log('   3. Configure email templates as needed\n');
   } catch (error) {
     console.error('❌ Error:', error.message);
     process.exit(1);

@@ -10,6 +10,7 @@ import Scrollbar from "@/components/ui/scrollbar";
 import "styles-marketing/main.css";
 import localFont from "next/font/local";
 import { CurrencyProvider } from "@/contexts/CurrencyContext";
+import { AuthProvider } from "@/contexts/AuthContext";
 import ReferrerCookie from "@/components/shared/referrer-cookie";
 import Header from "@/components/shared/header/Header";
 import { HeaderProvider } from "@/components/shared/header/HeaderContext";
@@ -112,17 +113,19 @@ export default function RootLayout({ children }: PropsWithChildren) {
       <body
         className={`${GeistMono.variable} ${robotoMono.variable} ${suisse.variable} font-sans text-accent-black bg-background-base overflow-x-clip`}
       >
-        <CurrencyProvider>
-          <HeaderProvider>
-            <Header />
-            <div className="fixed top-0 z-[2] cmw-container border-x border-border-faint h-screen pointer-events-none" />
-            <main className="overflow-x-clip">{children}</main>
-          </HeaderProvider>
-          <Scrollbar />
-          <Suspense>
-            <Toaster richColors toastOptions={{ duration: 3000 }} />
-          </Suspense>
-        </CurrencyProvider>
+        <AuthProvider>
+          <CurrencyProvider>
+            <HeaderProvider>
+              <Header />
+              <div className="fixed top-0 z-[2] cmw-container border-x border-border-faint h-screen pointer-events-none" />
+              <main className="overflow-x-clip">{children}</main>
+            </HeaderProvider>
+            <Scrollbar />
+            <Suspense>
+              <Toaster richColors toastOptions={{ duration: 3000 }} />
+            </Suspense>
+          </CurrencyProvider>
+        </AuthProvider>
         <ReferrerCookie />
       </body>
     </html>
