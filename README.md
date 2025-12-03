@@ -51,8 +51,9 @@ In your Supabase Dashboard:
 1. Go to **Database → Extensions**
 2. Search for and enable:
    - `pg_cron` (for scheduled jobs)
-   - `pg_net` (for HTTP requests)
+   - `pg_net` (for HTTP requests from database)
    - `vector` (for AI-powered semantic search on execution summaries)
+   - `supabase_vault` (for secure credential storage - usually enabled by default)
 
 ### 4. Set Up Environment Variables
 
@@ -77,9 +78,11 @@ This will:
 - Add user authentication support (user_id columns, Row Level Security)
 - Enable real-time subscriptions
 - Set up vector embeddings for AI-generated execution summaries
-- Set up the cron job for automatic scout execution (runs every 5 minutes)
+- Configure the **scalable dispatcher architecture** (pg_cron + pg_net + vault)
+- Automatically store your Supabase URL and service role key in the vault
+- Set up cron jobs for scout dispatching and cleanup
 
-**Note:** The setup script will check if the `vector` extension is enabled. If not, follow the instructions to enable it in the Supabase Dashboard before proceeding.
+**Note:** The setup script will check if the required extensions (`vector`, `pg_cron`, `pg_net`) are enabled. If not, follow the on-screen instructions to enable them in the Supabase Dashboard, then run the script again.
 
 ### 6. Set Up Authentication
 
@@ -182,7 +185,7 @@ Open [http://localhost:3000](http://localhost:3000) to see the app.
 2. **AI Agent Setup**: The system automatically configures search queries and strategies
 3. **Set Frequency**: Choose how often to run (hourly, every 3 days, weekly)
 4. **Configure Notifications**: Add your email in Settings to receive alerts when scouts find results
-5. **Continuous Monitoring**: The cron job runs every 5 minutes and executes active scouts
+5. **Continuous Monitoring**: The dispatcher checks every minute and triggers due scouts individually
 6. **AI Summaries**: Each successful execution generates a concise one-sentence summary with semantic embeddings
 7. **Get Notified**: Receive email alerts when scouts find new results (if email is configured)
 8. **View Results**: See all findings with AI-generated summaries in real-time on the scout page
@@ -213,6 +216,26 @@ When scouts find results, you'll automatically receive email alerts:
 - **AI Summaries**: Auto-generated one-sentence summaries with vector embeddings for each successful execution
 - **Edge Function**: Deno-based serverless function that orchestrates agent execution
 - **Web Scraping**: Firecrawl API for search and content extraction
+
+#### Scalable Dispatcher Architecture
+
+Open Scouts uses a dispatcher pattern designed to scale to thousands of scouts:
+
+```
+Every minute:
+pg_cron → dispatch_due_scouts() → finds due scouts → pg_net HTTP POST
+                                                          ↓
+                                    ┌──────────────────────┼──────────────────────┐
+                                    ↓                      ↓                      ↓
+                              Edge Function          Edge Function          Edge Function
+                              (scout A)              (scout B)              (scout C)
+                              [isolated]             [isolated]             [isolated]
+```
+
+- **Dispatcher (SQL)**: Runs every minute via pg_cron, queries for due scouts, and fires individual HTTP requests
+- **Isolated Execution**: Each scout runs in its own edge function invocation with full resources (256MB memory, 400s timeout)
+- **Automatic Cleanup**: A separate cron job cleans up stuck executions every 5 minutes
+- **Vault Integration**: Supabase credentials are securely stored in the vault and read by the dispatcher
 
 ## Security
 
