@@ -86,6 +86,8 @@ CREATE TABLE IF NOT EXISTS user_preferences (
     CHECK (firecrawl_key_status IN ('pending', 'active', 'fallback', 'failed', 'invalid')),
   firecrawl_key_created_at TIMESTAMP WITH TIME ZONE,
   firecrawl_key_error TEXT,
+  -- Rate limiting
+  last_test_email_at TIMESTAMP WITH TIME ZONE, -- For rate limiting test emails (2 min cooldown)
   -- Timestamps
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

@@ -44,6 +44,7 @@ export default function SettingsPage() {
     "idle",
   );
   const [testMessage, setTestMessage] = useState("");
+  const [testEmailCooldown, setTestEmailCooldown] = useState(0);
 
   // Firecrawl state
   const [firecrawlInfo, setFirecrawlInfo] = useState<FirecrawlInfo | null>(
@@ -115,7 +116,20 @@ export default function SettingsPage() {
     return () => clearInterval(timer);
   }, [regenerateCooldown]);
 
+  // Cooldown timer for test email button
+  useEffect(() => {
+    if (testEmailCooldown <= 0) return;
+
+    const timer = setInterval(() => {
+      setTestEmailCooldown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [testEmailCooldown]);
+
   const sendTestEmail = async () => {
+    if (testEmailCooldown > 0) return;
+
     setSendingTest(true);
     setTestStatus("idle");
     setTestMessage("");
@@ -143,9 +157,16 @@ export default function SettingsPage() {
       if (!response.ok) {
         setTestStatus("error");
         setTestMessage(data.error || "Failed to send test email");
+
+        // Handle rate limiting (429)
+        if (response.status === 429 && data.cooldownRemaining) {
+          setTestEmailCooldown(data.cooldownRemaining);
+        }
       } else {
         setTestStatus("success");
         setTestMessage("Test email sent! Check your inbox.");
+        // Set cooldown after successful send (2 minutes)
+        setTestEmailCooldown(120);
 
         // PostHog: Track test email sent
         posthog.capture("test_email_sent", {
@@ -616,7 +637,7 @@ export default function SettingsPage() {
                   <div className="mt-16">
                     <Button
                       onClick={sendTestEmail}
-                      disabled={sendingTest}
+                      disabled={sendingTest || testEmailCooldown > 0}
                       variant="secondary"
                       className="flex items-center gap-8"
                     >
@@ -624,6 +645,11 @@ export default function SettingsPage() {
                         <>
                           <div className="animate-spin rounded-full h-16 w-16 border-2 border-black-alpha-32 border-t-transparent" />
                           Sending...
+                        </>
+                      ) : testEmailCooldown > 0 ? (
+                        <>
+                          <Clock className="w-16 h-16" />
+                          Wait {testEmailCooldown}s
                         </>
                       ) : (
                         <>
