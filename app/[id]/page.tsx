@@ -23,8 +23,8 @@ import posthog from "posthog-js";
 // Rate limit: 20 minutes between manual runs
 const MANUAL_RUN_COOLDOWN_MS = 20 * 60 * 1000;
 
-// Timeout for waiting for execution to appear in database
-const EXECUTION_WAIT_TIMEOUT_MS = 20 * 1000; // 20 seconds
+// Timeout for waiting for execution to appear in database after triggering
+const TRIGGER_TIMEOUT_MS = 60 * 1000; // 60 seconds
 
 type Scout = {
   id: string;
@@ -58,8 +58,7 @@ export default function ExecutionsPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [cooldownRemaining, setCooldownRemaining] = useState<number>(0);
-  const [waitingForExecution, setWaitingForExecution] = useState(false);
-  const waitingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const triggerTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const executionCountBeforeTrigger = useRef<number>(0);
 
   const triggerExecution = useCallback(async () => {
@@ -67,6 +66,11 @@ export default function ExecutionsPage() {
 
     // Store current execution count to detect when a new one arrives
     executionCountBeforeTrigger.current = executions.length;
+
+    // Clear any existing timeout
+    if (triggerTimeoutRef.current) {
+      clearTimeout(triggerTimeoutRef.current);
+    }
 
     try {
       const response = await fetch("/api/scout/execute", {
@@ -90,27 +94,18 @@ export default function ExecutionsPage() {
         trigger_source: "manual",
       });
 
-      // API call succeeded - now wait for execution to appear in database
-      setTriggering(false);
-      setWaitingForExecution(true);
-
-      // Clear any existing timeout
-      if (waitingTimeoutRef.current) {
-        clearTimeout(waitingTimeoutRef.current);
-      }
-
-      // Set timeout - if execution doesn't appear within 20 seconds, stop waiting
-      waitingTimeoutRef.current = setTimeout(() => {
-        setWaitingForExecution(false);
+      // API call succeeded - keep triggering=true until execution appears in DB
+      // Set timeout as fallback - if execution doesn't appear within 60 seconds, stop waiting
+      triggerTimeoutRef.current = setTimeout(() => {
+        setTriggering(false);
         console.warn("Timeout waiting for execution to appear in database");
-      }, EXECUTION_WAIT_TIMEOUT_MS);
+      }, TRIGGER_TIMEOUT_MS);
     } catch (error) {
       console.error("Error triggering execution:", error);
       const message =
         error instanceof Error ? error.message : "Failed to trigger execution";
       alert(message);
       setTriggering(false);
-      setWaitingForExecution(false);
     }
   }, [scoutId, executions.length]);
 
@@ -227,26 +222,27 @@ export default function ExecutionsPage() {
     };
   }, [scoutId, loadExecutions]);
 
-  // Clear waiting state when a new execution appears in the database
+  // Clear triggering state when a new execution appears in the database
   useEffect(() => {
     if (
-      waitingForExecution &&
+      triggering &&
       executions.length > executionCountBeforeTrigger.current
     ) {
-      // New execution has appeared - clear the waiting state
-      setWaitingForExecution(false);
-      if (waitingTimeoutRef.current) {
-        clearTimeout(waitingTimeoutRef.current);
-        waitingTimeoutRef.current = null;
+      // New execution has appeared - clear the triggering state
+      // hasRunningExecution will now take over to keep button disabled
+      setTriggering(false);
+      if (triggerTimeoutRef.current) {
+        clearTimeout(triggerTimeoutRef.current);
+        triggerTimeoutRef.current = null;
       }
     }
-  }, [executions.length, waitingForExecution]);
+  }, [executions.length, triggering]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
     return () => {
-      if (waitingTimeoutRef.current) {
-        clearTimeout(waitingTimeoutRef.current);
+      if (triggerTimeoutRef.current) {
+        clearTimeout(triggerTimeoutRef.current);
       }
     };
   }, []);
@@ -368,9 +364,8 @@ export default function ExecutionsPage() {
     (execution) => execution.status === "running",
   );
   const isOnCooldown = cooldownRemaining > 0;
-  const isInRunningState = waitingForExecution || hasRunningExecution;
-  const isButtonDisabled =
-    triggering || hasRunningExecution || isOnCooldown || waitingForExecution;
+  const isInRunningState = triggering || hasRunningExecution;
+  const isButtonDisabled = triggering || hasRunningExecution || isOnCooldown;
 
   // Format cooldown remaining as MM:SS
   const formatCooldown = (ms: number): string => {
