@@ -482,14 +482,6 @@ export default function ScoutPage() {
                 </span>
               </div>
               <Button
-                variant="outline"
-                size="sm"
-                onClick={() => router.push(`/${scoutId}`)}
-                className="hidden md:flex text-body-small"
-              >
-                View Executions
-              </Button>
-              <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => setSettingsOpen(true)}
