@@ -4,25 +4,30 @@ import { createServerSupabaseClient, supabaseServer } from "@/lib/supabase/serve
 // Admin email domain check
 const ADMIN_EMAIL_DOMAIN = "@sideguide.dev";
 
+// Helper to verify admin access
+async function verifyAdminAccess() {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { error: "Not authenticated", status: 401 };
+  }
+
+  if (!user.email?.endsWith(ADMIN_EMAIL_DOMAIN)) {
+    return { error: "Unauthorized - Admin access required", status: 403 };
+  }
+
+  return { user };
+}
+
 export async function GET() {
   try {
-    const supabase = await createServerSupabaseClient();
-
-    // Verify user is authenticated
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    // Verify admin access
+    const authResult = await verifyAdminAccess();
+    if ("error" in authResult) {
       return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      );
-    }
-
-    // Verify user has @sideguide.dev email
-    if (!user.email?.endsWith(ADMIN_EMAIL_DOMAIN)) {
-      return NextResponse.json(
-        { error: "Unauthorized - Admin access required" },
-        { status: 403 }
+        { error: authResult.error },
+        { status: authResult.status }
       );
     }
 
@@ -175,6 +180,75 @@ export async function GET() {
     });
   } catch (error: any) {
     console.error("[admin] Error:", error);
+    return NextResponse.json(
+      { error: error.message || "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE - Delete a user and all their data
+export async function DELETE(req: Request) {
+  try {
+    // Verify admin access
+    const authResult = await verifyAdminAccess();
+    if ("error" in authResult) {
+      return NextResponse.json(
+        { error: authResult.error },
+        { status: authResult.status }
+      );
+    }
+
+    const adminUser = authResult.user;
+    const { userId } = await req.json();
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: "userId is required" },
+        { status: 400 }
+      );
+    }
+
+    // Prevent admin from deleting themselves
+    if (userId === adminUser.id) {
+      return NextResponse.json(
+        { error: "Cannot delete your own account" },
+        { status: 400 }
+      );
+    }
+
+    console.log(`[admin] Deleting user ${userId}...`);
+
+    // Get user info before deletion for logging
+    const { data: targetUser } = await supabaseServer.auth.admin.getUserById(userId);
+    const userEmail = targetUser?.user?.email || "unknown";
+
+    // Delete from auth.users - this will CASCADE to:
+    // - scouts (ON DELETE CASCADE)
+    //   - scout_messages (ON DELETE CASCADE from scouts)
+    //   - scout_executions (ON DELETE CASCADE from scouts)
+    //     - scout_execution_steps (ON DELETE CASCADE from scout_executions)
+    // - user_preferences (ON DELETE CASCADE)
+    // - firecrawl_usage_logs (ON DELETE CASCADE)
+    const { error: deleteError } = await supabaseServer.auth.admin.deleteUser(userId);
+
+    if (deleteError) {
+      console.error(`[admin] Error deleting user ${userId}:`, deleteError);
+      return NextResponse.json(
+        { error: `Failed to delete user: ${deleteError.message}` },
+        { status: 500 }
+      );
+    }
+
+    console.log(`[admin] Successfully deleted user ${userEmail} (${userId})`);
+
+    return NextResponse.json({
+      success: true,
+      message: `User ${userEmail} has been deleted`,
+      deletedUserId: userId,
+    });
+  } catch (error: any) {
+    console.error("[admin] Delete error:", error);
     return NextResponse.json(
       { error: error.message || "Internal server error" },
       { status: 500 }

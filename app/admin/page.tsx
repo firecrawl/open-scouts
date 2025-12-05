@@ -15,7 +15,15 @@ import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
+  Trash2,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/shadcn/dialog";
 
 type UserData = {
   id: string;
@@ -49,6 +57,9 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<UserData | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const isAdmin = user?.email?.endsWith(ADMIN_EMAIL_DOMAIN);
 
@@ -94,6 +105,45 @@ export default function AdminPage() {
     if (page >= 1 && page <= totalPages) {
       setCurrentPage(page);
     }
+  };
+
+  const openDeleteDialog = (userData: UserData) => {
+    setUserToDelete(userData);
+    setDeleteDialogOpen(true);
+  };
+
+  const closeDeleteDialog = () => {
+    setDeleteDialogOpen(false);
+    setUserToDelete(null);
+  };
+
+  const confirmDelete = async () => {
+    if (!userToDelete) return;
+
+    setDeleting(true);
+    try {
+      const response = await fetch("/api/admin", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ userId: userToDelete.id }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        alert(result.error || "Failed to delete user");
+      } else {
+        // Refresh the data after successful deletion
+        await fetchData();
+      }
+    } catch (error) {
+      alert("Failed to delete user");
+    }
+
+    setDeleting(false);
+    closeDeleteDialog();
   };
 
   const formatDate = (dateString: string | null) => {
@@ -269,6 +319,9 @@ export default function AdminPage() {
                       <th className="text-left px-16 py-12 text-label-small font-semibold text-black-alpha-56">
                         Last Sign In
                       </th>
+                      <th className="text-center px-16 py-12 text-label-small font-semibold text-black-alpha-56">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -323,6 +376,15 @@ export default function AdminPage() {
                           <span className="text-mono-x-small text-black-alpha-48">
                             {formatDateTime(u.lastSignIn)}
                           </span>
+                        </td>
+                        <td className="px-16 py-12 text-center">
+                          <button
+                            onClick={() => openDeleteDialog(u)}
+                            className="p-6 rounded-6 hover:bg-accent-crimson/10 text-black-alpha-32 hover:text-accent-crimson transition"
+                            title="Delete user"
+                          >
+                            <Trash2 className="w-14 h-14" />
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -382,6 +444,50 @@ export default function AdminPage() {
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="p-24">
+          <DialogHeader>
+            <DialogTitle>Delete User</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete{" "}
+              <strong>{userToDelete?.email}</strong>? This will permanently
+              delete:
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="text-body-small text-black-alpha-56 list-disc list-inside space-y-4 mt-8">
+            <li>
+              {userToDelete?.scoutCount || 0} scout
+              {userToDelete?.scoutCount !== 1 ? "s" : ""}
+            </li>
+            <li>
+              {userToDelete?.executionCount || 0} execution
+              {userToDelete?.executionCount !== 1 ? "s" : ""}
+            </li>
+            <li>All messages and preferences</li>
+          </ul>
+          <p className="text-body-small text-accent-crimson mt-12">
+            This action cannot be undone.
+          </p>
+          <div className="flex flex-row gap-12 justify-end mt-16">
+            <Button
+              variant="secondary"
+              onClick={closeDeleteDialog}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDelete}
+              disabled={deleting}
+            >
+              {deleting ? "Deleting..." : "Delete User"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
