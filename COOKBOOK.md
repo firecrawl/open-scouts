@@ -1,141 +1,24 @@
 # Cookbook: Примеры и Рецепты
 
-В этом документе собраны примеры кода для реализации миграции на стек Python + aiohttp + Ollama + Crawl4AI.
+В этом документе собраны примеры кода для реализации миграции на стек Python + aiohttp + Ollama + Crawl4AI (External Service).
 
-## 1. Структура проекта (Рекомендуемая)
+## 1. Структура проекта
 
 ```text
 backend/
 ├── app/
 │   ├── __init__.py
 │   ├── main.py          # Entry point
-│   ├── routes.py        # Маршрутизация
-│   ├── database.py      # Управление БД (SQLite/PG)
-│   ├── auth.py          # JWT утилиты
-│   ├── models.py        # SQLAlchemy Core таблицы
+│   ├── database.py      # Управление БД
 │   └── services/
-│       ├── agent.py     # Логика скаута
-│       ├── llm.py       # Обертка над Ollama
-│       └── scraper.py   # Обертка над Crawl4AI
+│       ├── scraper_client.py   # Клиент к внешнему сервису Crawl4AI
+│       └── llm_client.py       # Клиент к внешнему сервису Ollama
 ├── Dockerfile
 ├── requirements.txt
 └── docker-compose.yml
 ```
 
-## 2. Настройка aiohttp сервера (без FastAPI)
-
-```python
-# app/main.py
-import logging
-from aiohttp import web
-from app.routes import setup_routes
-from app.database import db_manager
-
-async def init_app():
-    app = web.Application()
-
-    # Настройка БД при старте/остановке
-    app.on_startup.append(db_manager.connect)
-    app.on_cleanup.append(db_manager.disconnect)
-
-    setup_routes(app)
-    return app
-
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
-    web.run_app(init_app(), port=8000)
-```
-
-## 3. Универсальный Database Manager (SQLite + Postgres)
-
-```python
-# app/database.py
-import os
-from sqlalchemy.ext.asyncio import create_async_engine
-from sqlalchemy import text
-
-class DatabaseManager:
-    def __init__(self):
-        self.engine = None
-        # Читаем из ENV. Если не задано - используем SQLite файл
-        self.db_url = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./scouts.db")
-
-    async def connect(self, app):
-        print(f"Connecting to database: {self.db_url}")
-        self.engine = create_async_engine(self.db_url, echo=True)
-
-    async def disconnect(self, app):
-        if self.engine:
-            await self.engine.dispose()
-
-    async def fetch_all(self, query, params=None):
-        async with self.engine.connect() as conn:
-            result = await conn.execute(text(query), params or {})
-            return result.mappings().all()
-
-    async def execute(self, query, params=None):
-        async with self.engine.begin() as conn:
-            await conn.execute(text(query), params or {})
-
-db_manager = DatabaseManager()
-```
-
-## 4. Интеграция Ollama (Async)
-
-Используем библиотеку `ollama` в асинхронном режиме.
-
-```python
-# app/services/llm.py
-import ollama
-import asyncio
-
-class LLMService:
-    def __init__(self, model="llama3"):
-        self.model = model
-        self.client = ollama.AsyncClient(host=os.getenv("OLLAMA_HOST", "http://ollama:11434"))
-
-    async def chat(self, messages):
-        """
-        messages format: [{'role': 'user', 'content': '...'}]
-        """
-        response = await self.client.chat(model=self.model, messages=messages)
-        return response['message']['content']
-
-    async def generate_json(self, prompt, schema=None):
-        """
-        Генерация структурированного ответа (JSON).
-        В промпте нужно явно попросить JSON.
-        """
-        messages = [
-            {'role': 'system', 'content': 'You are a JSON generator. Output only valid JSON.'},
-            {'role': 'user', 'content': prompt}
-        ]
-        # В более новых версиях Ollama есть параметр format='json'
-        response = await self.client.chat(model=self.model, messages=messages, format='json')
-        return response['message']['content']
-```
-
-## 5. Скрапинг с Crawl4AI
-
-```python
-# app/services/scraper.py
-from crawl4ai import AsyncWebCrawler
-
-async def scrape_url(url: str):
-    async with AsyncWebCrawler(verbose=True) as crawler:
-        result = await crawler.arun(url=url)
-
-        if result.success:
-            return {
-                "title": result.soup.title.string if result.soup.title else "",
-                "markdown": result.markdown,
-                "url": url
-            }
-        else:
-            return {"error": result.error_message}
-```
-
-## 6. Docker Compose Setup
+## 2. Docker Compose с внешним скрапером
 
 ```yaml
 # docker-compose.yml
@@ -149,9 +32,11 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://user:pass@db:5432/scouts
       - OLLAMA_HOST=http://ollama:11434
+      - CRAWL4AI_URL=http://crawl4ai:11235  # URL сервиса скрапинга
     depends_on:
       - db
       - ollama
+      - crawl4ai
 
   db:
     image: postgres:15
@@ -169,7 +54,126 @@ services:
     volumes:
       - ollama_data:/root/.ollama
 
+  # Crawl4AI как отдельный сервис с API
+  crawl4ai:
+    image: unclecode/crawl4ai:latest
+    ports:
+      - "11235:11235"  # Стандартный порт API (уточнить в документации образа)
+    environment:
+      - MAX_CONCURRENT_CRAWLS=5
+    shm_size: '2gb'    # Важно для работы браузера
+
 volumes:
   pg_data:
   ollama_data:
+```
+
+## 3. Клиент для внешнего сервиса Crawl4AI
+
+Вместо импорта библиотеки, мы делаем HTTP запрос к API сервиса.
+
+```python
+# app/services/scraper_client.py
+import os
+import aiohttp
+import logging
+
+logger = logging.getLogger(__name__)
+
+class ScraperClient:
+    def __init__(self):
+        # URL сервиса из docker-compose
+        self.base_url = os.getenv("CRAWL4AI_URL", "http://crawl4ai:11235")
+
+    async def scrape_url(self, url: str):
+        """
+        Отправляет задачу на скрапинг во внешний сервис.
+        """
+        async with aiohttp.ClientSession() as session:
+            try:
+                # Примерный payload для API Crawl4AI (уточнить в документации API)
+                payload = {
+                    "urls": url,
+                    "include_raw_html": False,
+                    "bypass_cache": True
+                }
+
+                async with session.post(f"{self.base_url}/crawl", json=payload) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        logger.error(f"Scraper service error: {response.status} - {error_text}")
+                        return {"error": f"Service unavailable: {response.status}"}
+
+                    data = await response.json()
+
+                    # Предполагаем, что сервис возвращает структуру с полем markdown
+                    # Структура ответа может зависеть от версии API
+                    result = data.get("results", [{}])[0]
+                    return {
+                        "title": result.get("metadata", {}).get("title", ""),
+                        "markdown": result.get("markdown", ""),
+                        "url": url
+                    }
+
+            except aiohttp.ClientError as e:
+                logger.error(f"Connection to scraper service failed: {e}")
+                return {"error": str(e)}
+
+scraper_client = ScraperClient()
+```
+
+## 4. Клиент для Ollama (через HTTP)
+
+Можно использовать официальную либу, но для чистоты `aiohttp` подхода можно делать прямые запросы.
+
+```python
+# app/services/llm_client.py
+import os
+import aiohttp
+import json
+
+class LLMClient:
+    def __init__(self, model="llama3"):
+        self.model = model
+        self.host = os.getenv("OLLAMA_HOST", "http://ollama:11434")
+
+    async def chat(self, messages):
+        url = f"{self.host}/api/chat"
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "stream": False
+        }
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data.get("message", {}).get("content", "")
+                else:
+                    return f"Error: {response.status}"
+```
+
+## 5. Основной сервер aiohttp
+
+```python
+# app/main.py
+from aiohttp import web
+from app.services.scraper_client import scraper_client
+
+async def handle_scrape_test(request):
+    data = await request.json()
+    url = data.get("url")
+    if not url:
+        return web.json_response({"error": "URL required"}, status=400)
+
+    # Вызов внешнего сервиса
+    result = await scraper_client.scrape_url(url)
+    return web.json_response(result)
+
+app = web.Application()
+app.add_routes([web.post('/test-scrape', handle_scrape_test)])
+
+if __name__ == '__main__':
+    web.run_app(app, port=8000)
 ```
