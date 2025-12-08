@@ -6,7 +6,6 @@ import {
 
 // Rate limiting constants
 const MANUAL_RUN_COOLDOWN_MS = 20 * 60 * 1000; // 20 minutes between manual runs
-const MAX_DAILY_EXECUTIONS_PER_USER = 10; // Max executions per user per day
 
 export async function POST(req: Request) {
   try {
@@ -69,44 +68,6 @@ export async function POST(req: Request) {
           {
             error: `Please wait ${Math.ceil(remainingSeconds / 60)} minutes before running this scout again`,
             cooldownRemaining: remainingSeconds,
-          },
-          { status: 429 },
-        );
-      }
-    }
-
-    // Server-side rate limiting: Check daily execution limit for this user
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    // First get all scout IDs for this user
-    const { data: userScouts } = await supabaseServer
-      .from("scouts")
-      .select("id")
-      .eq("user_id", user.id);
-
-    if (userScouts && userScouts.length > 0) {
-      const scoutIds = userScouts.map((s) => s.id);
-
-      // Count executions for all user's scouts today
-      const { count: userDailyExecutions } = await supabaseServer
-        .from("scout_executions")
-        .select("id", { count: "exact", head: true })
-        .in("scout_id", scoutIds)
-        .gte("started_at", today.toISOString());
-
-      if (
-        userDailyExecutions !== null &&
-        userDailyExecutions >= MAX_DAILY_EXECUTIONS_PER_USER
-      ) {
-        console.log(
-          `[scout/execute] Daily limit reached: ${userDailyExecutions}/${MAX_DAILY_EXECUTIONS_PER_USER} for user ${user.id}`,
-        );
-        return NextResponse.json(
-          {
-            error: `Daily execution limit reached (${MAX_DAILY_EXECUTIONS_PER_USER} per day). Please try again tomorrow.`,
-            dailyLimit: MAX_DAILY_EXECUTIONS_PER_USER,
-            currentCount: userDailyExecutions,
           },
           { status: 429 },
         );
