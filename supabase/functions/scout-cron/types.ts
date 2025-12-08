@@ -20,7 +20,7 @@ export interface Scout {
 export type FirecrawlKeyStatus = "pending" | "active" | "fallback" | "failed" | "invalid";
 
 export interface FirecrawlKeyResult {
-  apiKey: string;
+  apiKey: string | null;
   usedFallback: boolean;
   fallbackReason?: string;
 }

@@ -108,12 +108,12 @@ export async function updateStep(
 
 /**
  * Gets the Firecrawl API key for a user.
- * Returns the user's key if available and active, otherwise falls back to the partner key.
+ * Returns the user's key if available and active, otherwise returns null.
+ * No fallback to shared key - each user must have their own API key.
  */
 export async function getFirecrawlKeyForUser(
   supabase: any,
-  userId: string,
-  fallbackKey: string
+  userId: string
 ): Promise<FirecrawlKeyResult> {
   try {
     const { data, error } = await supabase
@@ -123,10 +123,10 @@ export async function getFirecrawlKeyForUser(
       .single();
 
     if (error) {
-      console.log(`[Firecrawl] No preferences found for user ${userId}, using fallback`);
+      console.log(`[Firecrawl] No preferences found for user ${userId}`);
       return {
-        apiKey: fallbackKey,
-        usedFallback: true,
+        apiKey: null,
+        usedFallback: false,
         fallbackReason: "no_preferences_record",
       };
     }
@@ -142,7 +142,7 @@ export async function getFirecrawlKeyForUser(
       };
     }
 
-    // Otherwise, use fallback and log the reason
+    // No valid key found - log the reason
     let fallbackReason: string;
     if (!firecrawl_api_key) {
       fallbackReason = "no_api_key";
@@ -156,17 +156,17 @@ export async function getFirecrawlKeyForUser(
       fallbackReason = `status_${firecrawl_key_status || "unknown"}`;
     }
 
-    console.log(`[Firecrawl] Using fallback key (reason: ${fallbackReason})`);
+    console.log(`[Firecrawl] No valid API key for user (reason: ${fallbackReason})`);
     return {
-      apiKey: fallbackKey,
-      usedFallback: true,
+      apiKey: null,
+      usedFallback: false,
       fallbackReason,
     };
   } catch (error: any) {
     console.error(`[Firecrawl] Error fetching user key: ${error.message}`);
     return {
-      apiKey: fallbackKey,
-      usedFallback: true,
+      apiKey: null,
+      usedFallback: false,
       fallbackReason: `error: ${error.message}`,
     };
   }

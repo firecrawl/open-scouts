@@ -80,22 +80,21 @@ export async function executeScoutAgent(scout: Scout, supabase: any): Promise<vo
 
   try {
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-    const FIRECRAWL_PARTNER_KEY = Deno.env.get("FIRECRAWL_API_KEY");
 
     if (!OPENAI_API_KEY) {
       throw new Error("OPENAI_API_KEY not configured");
     }
 
-    if (!FIRECRAWL_PARTNER_KEY) {
-      throw new Error("FIRECRAWL_API_KEY (partner key) not configured");
-    }
-
-    // Get the user's Firecrawl API key, with fallback to partner key
+    // Get the user's Firecrawl API key - no fallback, each user must have their own key
     const firecrawlKeyResult = await getFirecrawlKeyForUser(
       supabase,
-      scout.user_id,
-      FIRECRAWL_PARTNER_KEY
+      scout.user_id
     );
+
+    if (!firecrawlKeyResult.apiKey) {
+      throw new Error("User does not have a valid Firecrawl API key configured. Please add your API key in Settings.");
+    }
+
     const FIRECRAWL_API_KEY = firecrawlKeyResult.apiKey;
 
     // Track total API calls for usage logging
