@@ -10,7 +10,7 @@ Open Scouts is an AI-powered monitoring platform that lets you create "scouts" -
 
 ## Tech Stack
 
-- **Next.js 16** (with App Router & Turbopack)
+- **Next.js 15**
 - **React 19**
 - **TypeScript**
 - **Tailwind CSS v4**
