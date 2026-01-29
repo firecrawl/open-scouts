@@ -33,28 +33,30 @@ export async function GET(request: Request) {
           preferences?.firecrawl_api_key &&
           preferences?.firecrawl_key_status === "active";
 
-        // PostHog: Identify user and track Google OAuth login on server side
+        // PostHog: Identify user and track Google OAuth login on server side (optional)
         const posthog = getPostHogClient();
-        const isNewUser = !hasActiveKey;
+        if (posthog) {
+          const isNewUser = !hasActiveKey;
 
-        posthog.identify({
-          distinctId: user.id,
-          properties: {
-            email: user.email,
-          },
-        });
+          posthog.identify({
+            distinctId: user.id,
+            properties: {
+              email: user.email,
+            },
+          });
 
-        posthog.capture({
-          distinctId: user.id,
-          event: isNewUser ? "user_signed_up" : "user_logged_in",
-          properties: {
-            method: "google",
-            email: user.email,
-            is_new_user: isNewUser,
-          },
-        });
+          posthog.capture({
+            distinctId: user.id,
+            event: isNewUser ? "user_signed_up" : "user_logged_in",
+            properties: {
+              method: "google",
+              email: user.email,
+              is_new_user: isNewUser,
+            },
+          });
 
-        await posthog.shutdown();
+          await posthog.shutdown();
+        }
 
         if (!hasActiveKey) {
           try {
