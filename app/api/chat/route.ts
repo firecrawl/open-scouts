@@ -173,7 +173,7 @@ ${currentScout.frequency ? `- Frequency: ${currentScout.frequency}` : "- Frequen
 Be conversational and helpful. When scout is complete, tell user they can modify anything by chatting with you. Never use em dashes (—)`;
 
   const result = streamText({
-    model: openai("gpt-5-mini"),
+    model: openai("gpt-4.1-mini"),
     messages: convertToModelMessages(windowedMessages),
     system: systemPrompt,
     toolChoice: "auto",

@@ -137,7 +137,7 @@ export async function getFirecrawlKeyForUser(
     if (firecrawl_custom_api_key) {
       console.log(`[Firecrawl] Using user's custom API key`);
       return {
-        apiKey: firecrawl_custom_api_key,
+        apiKey: firecrawl_custom_api_key.trim(), // Trim whitespace to prevent 401 errors
         usedFallback: false,
       };
     }

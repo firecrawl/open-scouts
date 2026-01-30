@@ -18,14 +18,19 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get the user's Firecrawl API key from preferences
+    // Get the user's Firecrawl API key from preferences (custom key takes priority)
     const { data: preferences, error: prefError } = await supabaseServer
       .from("user_preferences")
-      .select("firecrawl_api_key, firecrawl_key_status")
+      .select("firecrawl_api_key, firecrawl_key_status, firecrawl_custom_api_key")
       .eq("user_id", user.id)
       .single();
 
-    if (prefError || !preferences?.firecrawl_api_key) {
+    // Use custom key if available, otherwise fall back to sponsored key
+    // Trim whitespace to prevent 401 errors from accidentally copied spaces/newlines
+    const apiKey = (preferences?.firecrawl_custom_api_key?.trim() || preferences?.firecrawl_api_key?.trim()) || null;
+    const isCustomKey = !!preferences?.firecrawl_custom_api_key;
+
+    if (prefError || !apiKey) {
       return NextResponse.json({
         success: true,
         data: {
@@ -40,7 +45,7 @@ export async function GET() {
     const response = await fetch(`${FIRECRAWL_API_URL}/team/credit-usage`, {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${preferences.firecrawl_api_key}`,
+        Authorization: `Bearer ${apiKey}`,
       },
     });
 
@@ -78,7 +83,8 @@ export async function GET() {
         planCredits: data.data?.plan_credits ?? null,
         billingPeriodStart: data.data?.billing_period_start ?? null,
         billingPeriodEnd: data.data?.billing_period_end ?? null,
-        status: preferences.firecrawl_key_status,
+        status: isCustomKey ? "active" : preferences.firecrawl_key_status,
+        isCustomKey,
       },
     });
   } catch (error) {

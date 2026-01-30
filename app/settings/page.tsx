@@ -375,8 +375,11 @@ export default function SettingsPage() {
       return;
     }
 
+    // Trim whitespace from the key (users often accidentally copy trailing spaces/newlines)
+    const trimmedKey = customApiKey?.trim() || null;
+
     // Validate format
-    if (customApiKey && !customApiKey.startsWith("fc-")) {
+    if (trimmedKey && !trimmedKey.startsWith("fc-")) {
       setApiKeyMessage("API key should start with 'fc-'");
       return;
     }
@@ -393,9 +396,9 @@ export default function SettingsPage() {
         .maybeSingle();
 
       const updateData = {
-        firecrawl_custom_api_key: customApiKey || null,
+        firecrawl_custom_api_key: trimmedKey,
         // If setting a custom key, mark status as active
-        ...(customApiKey && { firecrawl_key_status: "active" }),
+        ...(trimmedKey && { firecrawl_key_status: "active" }),
       };
 
       if (existing) {
@@ -413,7 +416,7 @@ export default function SettingsPage() {
         if (error) throw error;
       }
 
-      if (customApiKey) {
+      if (trimmedKey) {
         setHasCustomKey(true);
         setApiKeyMessage("API key saved successfully!");
         setFirecrawlInfo((prev) =>
@@ -421,11 +424,11 @@ export default function SettingsPage() {
         );
         // Mask the key after saving with first 3 and last 3 characters
         const masked =
-          customApiKey.length > 6
-            ? customApiKey.slice(0, 3) +
-              "•".repeat(customApiKey.length - 6) +
-              customApiKey.slice(-3)
-            : "•".repeat(customApiKey.length);
+          trimmedKey.length > 6
+            ? trimmedKey.slice(0, 3) +
+              "•".repeat(trimmedKey.length - 6) +
+              trimmedKey.slice(-3)
+            : "•".repeat(trimmedKey.length);
         setCustomApiKey(masked);
       } else {
         setHasCustomKey(false);
@@ -433,7 +436,7 @@ export default function SettingsPage() {
       }
 
       posthog.capture("firecrawl_custom_key_saved", {
-        has_key: !!customApiKey,
+        has_key: !!trimmedKey,
       });
 
       setTimeout(() => setApiKeyMessage(""), 3000);
