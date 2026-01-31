@@ -19,6 +19,7 @@ Open Scouts is an AI-powered monitoring platform that lets you create "scouts" -
 - **Firecrawl SDK** (@mendable/firecrawl-js)
 - **OpenAI API** (AI Agent + Embeddings)
 - **Resend** (Email Notifications)
+- **Resend** Telegram Bot API (Optional Notifications)
 
 ## Getting Started
 
@@ -171,6 +172,12 @@ Open Scouts uses [Firecrawl](https://firecrawl.dev) for web scraping and search.
 >
 > **You do NOT need to configure a Firecrawl API key in your environment variables.** Each user can simply add their own custom Firecrawl API key directly in the **Settings** page within the app. This is the recommended approach for most users.
 
+### Telegram Notifications (Optional)
+If you prefer Telegram alerts over Email:
+1. Create a bot via [@BotFather](https://t.me/BotFather) and get the token.
+2. Get your Chat ID via [@userinfobot](https://t.me/userinfobot).
+3. Set `NOTIFICATION_CHANNEL=telegram` in your environment variables.
+
 #### Custom API Key (Recommended)
 
 The simplest way to use Open Scouts:
@@ -195,7 +202,7 @@ If you're self-hosting and want to provide a shared API key for all users:
    ```
 4. Set the edge function secret:
    ```bash
-   npx supabase secrets set FIRECRAWL_API_KEY=fc-your-key-here
+   npx supabase secrets set --env-file .env
    ```
 
 **Note:** Users who add their own custom API key in Settings will use their personal key instead of the server-side shared key.
@@ -255,6 +262,7 @@ When scouts find results, you'll automatically receive email alerts at your acco
 **Email Service**: Powered by Resend (free tier includes 3,000 emails/month)
 
 **Note:** On Resend's free tier without a verified domain, emails can only be sent to your Resend account email. Verify a custom domain at [resend.com/domains](https://resend.com/domains) to send to any email.
+
 
 ### Architecture
 
