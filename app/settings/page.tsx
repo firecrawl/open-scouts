@@ -98,44 +98,32 @@ export default function SettingsPage() {
 
       setLoading(true);
       try {
-        const { data } = await supabase
-          .from("user_preferences")
-          .select(
-            "firecrawl_api_key, firecrawl_key_status, firecrawl_key_created_at, firecrawl_key_error, firecrawl_custom_api_key, location",
-          )
-          .eq("user_id", user.id)
-          .maybeSingle();
-
-        if (data) {
-          // Status only reflects the auto-generated key (sponsored integration)
-          setFirecrawlInfo({
-            status: (data.firecrawl_key_status ||
-              "pending") as FirecrawlKeyStatus,
-            hasKey: !!data.firecrawl_api_key,
-            createdAt: data.firecrawl_key_created_at,
-            error: data.firecrawl_key_error,
-          });
-          if (data.location) {
-            setUserLocation(data.location as UserLocation);
+        const response = await fetch("/api/firecrawl/key-info");
+        if (response.ok) {
+          const result = await response.json();
+          const data = result?.data;
+          if (data) {
+            setFirecrawlInfo({
+              status: (data.status || "pending") as FirecrawlKeyStatus,
+              hasKey: !!data.hasKey,
+              createdAt: data.createdAt,
+              error: data.error,
+            });
+            if (data.location) {
+              setUserLocation(data.location as UserLocation);
+            }
+            if (data.hasCustomKey && data.customApiKeyMasked) {
+              setHasCustomKey(true);
+              setCustomApiKey(data.customApiKeyMasked);
+            }
+          } else {
+            setFirecrawlInfo({
+              status: "pending",
+              hasKey: false,
+              createdAt: null,
+              error: null,
+            });
           }
-          if (data.firecrawl_custom_api_key) {
-            setHasCustomKey(true);
-            // Show masked version with first 3 and last 3 characters
-            const key = data.firecrawl_custom_api_key;
-            const masked =
-              key.length > 6
-                ? key.slice(0, 3) + "•".repeat(key.length - 6) + key.slice(-3)
-                : "•".repeat(key.length);
-            setCustomApiKey(masked);
-          }
-        } else {
-          // No preferences yet - set defaults
-          setFirecrawlInfo({
-            status: "pending",
-            hasKey: false,
-            createdAt: null,
-            error: null,
-          });
         }
       } catch {
         // Silently handle any exceptions
@@ -388,32 +376,16 @@ export default function SettingsPage() {
     setApiKeyMessage("");
 
     try {
-      // Check if user_preferences row exists
-      const { data: existing } = await supabase
-        .from("user_preferences")
-        .select("id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      const updateData = {
-        firecrawl_custom_api_key: trimmedKey,
-        // If setting a custom key, mark status as active
-        ...(trimmedKey && { firecrawl_key_status: "active" }),
-      };
-
-      if (existing) {
-        const { error } = await supabase
-          .from("user_preferences")
-          .update(updateData)
-          .eq("user_id", user.id);
-
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from("user_preferences")
-          .insert({ user_id: user.id, ...updateData });
-
-        if (error) throw error;
+      const response = trimmedKey
+        ? await fetch("/api/firecrawl/custom-key", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ apiKey: trimmedKey }),
+          })
+        : await fetch("/api/firecrawl/custom-key", { method: "DELETE" });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result?.error || "Failed to save API key");
       }
 
       if (trimmedKey) {
@@ -422,14 +394,9 @@ export default function SettingsPage() {
         setFirecrawlInfo((prev) =>
           prev ? { ...prev, status: "active", error: null } : prev,
         );
-        // Mask the key after saving with first 3 and last 3 characters
-        const masked =
-          trimmedKey.length > 6
-            ? trimmedKey.slice(0, 3) +
-              "•".repeat(trimmedKey.length - 6) +
-              trimmedKey.slice(-3)
-            : "•".repeat(trimmedKey.length);
-        setCustomApiKey(masked);
+        if (result?.data?.customApiKeyMasked) {
+          setCustomApiKey(result.data.customApiKeyMasked);
+        }
       } else {
         setHasCustomKey(false);
         setApiKeyMessage("API key removed");
@@ -826,19 +793,33 @@ export default function SettingsPage() {
 
                       {hasCustomKey && (
                         <button
-                          onClick={() => {
+                          onClick={async () => {
                             setCustomApiKey("");
                             setSavingApiKey(true);
-                            supabase
-                              .from("user_preferences")
-                              .update({ firecrawl_custom_api_key: null })
-                              .eq("user_id", user?.id)
-                              .then(() => {
-                                setHasCustomKey(false);
-                                setApiKeyMessage("API key removed");
-                                setSavingApiKey(false);
-                                setTimeout(() => setApiKeyMessage(""), 3000);
-                              });
+                            try {
+                              const response = await fetch(
+                                "/api/firecrawl/custom-key",
+                                { method: "DELETE" },
+                              );
+                              if (!response.ok) {
+                                const result = await response
+                                  .json()
+                                  .catch(() => ({}));
+                                throw new Error(
+                                  result?.error || "Failed to remove API key",
+                                );
+                              }
+                              setHasCustomKey(false);
+                              setApiKeyMessage("API key removed");
+                            } catch (error) {
+                              setApiKeyMessage(
+                                error instanceof Error
+                                  ? error.message
+                                  : "Failed to remove API key",
+                              );
+                            }
+                            setSavingApiKey(false);
+                            setTimeout(() => setApiKeyMessage(""), 3000);
                           }}
                           disabled={savingApiKey}
                           className="px-16 py-8 rounded-6 text-label-medium text-accent-crimson hover:bg-accent-crimson/10 transition-colors disabled:opacity-50"
