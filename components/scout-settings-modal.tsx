@@ -23,6 +23,13 @@ import { supabase } from "@/lib/supabase/client";
 import { X, Plus, Pencil } from "lucide-react";
 import posthog from "posthog-js";
 
+type ScrapeOptions = {
+  cookies?: string;
+  headers?: Record<string, string>;
+  waitFor?: number | string;
+  timeout?: number;
+};
+
 type Scout = {
   id: string;
   title: string;
@@ -38,6 +45,7 @@ type Scout = {
   } | null;
   frequency: "daily" | "every_3_days" | "weekly" | null;
   is_active: boolean;
+  scrape_options?: ScrapeOptions;
 };
 
 type Location = {
@@ -73,6 +81,8 @@ export function ScoutSettingsModal({
   >(null);
   const [isActive, setIsActive] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  // Scrape options state
+  const [cookies, setCookies] = useState("");
 
   // Track which fields are in edit mode
   const [editMode, setEditMode] = useState({
@@ -80,6 +90,7 @@ export function ScoutSettingsModal({
     goal: false,
     description: false,
     location: false,
+    cookies: false,
     searchQueries: false,
     frequency: false,
   });
@@ -98,6 +109,7 @@ export function ScoutSettingsModal({
       setSearchQueries(scout.search_queries || []);
       setFrequency(scout.frequency);
       setIsActive(scout.is_active);
+      setCookies(scout.scrape_options?.cookies || "");
       // Check if location is "any" (0, 0) or a real location
       const isAnyLocation =
         scout.location &&
@@ -115,6 +127,7 @@ export function ScoutSettingsModal({
         goal: false,
         description: false,
         location: false,
+        cookies: false,
         searchQueries: false,
         frequency: false,
       });
@@ -172,6 +185,14 @@ export function ScoutSettingsModal({
         locationToSave = scout.location;
       }
 
+      // Build scrape_options object
+      const scrapeOptions: ScrapeOptions = {};
+      if (cookies.trim()) {
+        scrapeOptions.cookies = cookies.trim();
+      }
+      // Only save if there are options set
+      const scrapeOptionsToSave = Object.keys(scrapeOptions).length > 0 ? scrapeOptions : null;
+
       const { error } = await supabase
         .from("scouts")
         .update({
@@ -181,6 +202,7 @@ export function ScoutSettingsModal({
           search_queries: searchQueries,
           frequency,
           location: locationToSave,
+          scrape_options: scrapeOptionsToSave,
         })
         .eq("id", scout.id);
 
@@ -547,6 +569,46 @@ export function ScoutSettingsModal({
                   frequencyLabels[frequency]
                 ) : (
                   <span className="text-gray-400 italic">Not set</span>
+                )}
+              </p>
+            )}
+          </div>
+
+          {/* Cookies (Advanced) */}
+          <div className="border-t pt-24">
+            <div className="flex items-center justify-between mb-12">
+              <div>
+                <label className="text-label-medium text-gray-700">
+                  Cookies
+                </label>
+                <p className="text-body-small text-gray-500 mt-2">
+                  Optional: Send cookies when scraping websites (for authenticated content)
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setEditMode({ ...editMode, cookies: !editMode.cookies })
+                }
+                className="p-6 hover:bg-gray-100 rounded-6 transition-colors"
+              >
+                <Pencil className="h-14 w-14 text-gray-500" />
+              </button>
+            </div>
+            {editMode.cookies ? (
+              <Textarea
+                value={cookies}
+                onChange={(e) => setCookies(e.target.value)}
+                placeholder="session_id=abc123; auth_token=xyz789"
+                className="w-full font-mono text-body-small"
+                rows={3}
+              />
+            ) : (
+              <p className="text-body-medium text-gray-900 py-12 px-16 bg-gray-50 rounded-6 min-h-[44px] flex items-center font-mono">
+                {cookies ? (
+                  <span className="truncate">{cookies.slice(0, 50)}{cookies.length > 50 ? '...' : ''}</span>
+                ) : (
+                  <span className="text-gray-400 italic font-sans">Not configured</span>
                 )}
               </p>
             )}

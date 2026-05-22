@@ -2,8 +2,22 @@
 
 import { isBlacklistedDomain } from "./constants.ts";
 
+// Options for Firecrawl requests
+export interface FirecrawlOptions {
+  headers?: Record<string, string>;  // Custom headers including cookies
+  cookies?: string;                   // Cookie string (convenience option)
+  waitFor?: number | string;          // Wait for selector or time (ms)
+  timeout?: number;                   // Request timeout in ms
+}
+
 // Execute web search using Firecrawl
-export async function executeSearchTool(args: any, apiKey: string, location?: string, maxAge?: number) {
+export async function executeSearchTool(
+  args: any,
+  apiKey: string,
+  location?: string,
+  maxAge?: number,
+  options?: FirecrawlOptions
+) {
   try {
     const searchPayload: any = {
       query: args.query,
@@ -17,6 +31,19 @@ export async function executeSearchTool(args: any, apiKey: string, location?: st
     // Only add tbs if provided
     if (args.tbs) {
       searchPayload.tbs = args.tbs;
+    }
+
+    // Add custom headers/cookies if provided
+    if (options?.headers || options?.cookies) {
+      searchPayload.scrapeOptions.headers = {
+        ...options.headers,
+        ...(options.cookies && { "Cookie": options.cookies }),
+      };
+    }
+
+    // Add wait options if provided
+    if (options?.waitFor) {
+      searchPayload.scrapeOptions.waitFor = options.waitFor;
     }
 
     // Add location and country parameters for geo-targeting
@@ -96,7 +123,12 @@ export async function executeSearchTool(args: any, apiKey: string, location?: st
 }
 
 // Execute website scraping using Firecrawl
-export async function executeScrapeTool(args: any, apiKey: string, maxAge?: number) {
+export async function executeScrapeTool(
+  args: any,
+  apiKey: string,
+  maxAge?: number,
+  options?: FirecrawlOptions
+) {
   try {
     const scrapePayload: any = {
       url: args.url,
@@ -109,6 +141,24 @@ export async function executeScrapeTool(args: any, apiKey: string, maxAge?: numb
       ],
       maxAge: maxAge || 3600000, // Default to 1 hour if not provided
     };
+
+    // Add custom headers/cookies if provided
+    if (options?.headers || options?.cookies) {
+      scrapePayload.headers = {
+        ...options.headers,
+        ...(options.cookies && { "Cookie": options.cookies }),
+      };
+    }
+
+    // Add wait options if provided (wait for selector or time in ms)
+    if (options?.waitFor) {
+      scrapePayload.waitFor = options.waitFor;
+    }
+
+    // Add custom timeout if provided
+    if (options?.timeout) {
+      scrapePayload.timeout = options.timeout;
+    }
 
     // Add 60-second timeout to prevent hanging
     const controller = new AbortController();
