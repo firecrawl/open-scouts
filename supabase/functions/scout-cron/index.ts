@@ -2,8 +2,8 @@
 // Handles individual scout execution - dispatched by pg_cron + pg_net
 // Deploy with: npx supabase functions deploy scout-cron
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { serve } from "std/http/server";
+import { createClient } from "@supabase/supabase-js";
 
 import type { Scout } from "./types.ts";
 import { corsHeaders } from "./constants.ts";
