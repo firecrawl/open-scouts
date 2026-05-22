@@ -91,15 +91,23 @@ export function normalizeEmail(email: string | null | undefined): string {
  * Returns a same-origin path safe to pass to router.push or NextResponse.redirect.
  *
  * Rejects anything that could navigate off-origin or execute script, including
- * absolute URLs, protocol-relative URLs (//evil.com, /\evil.com), and pseudo
- * schemes such as javascript:, data:, or vbscript:. Falls back to "/" for any
- * value that does not start with a single "/" followed by a path character.
+ * absolute URLs, protocol-relative URLs (//evil.com, /\evil.com), pseudo schemes
+ * such as javascript:, data:, or vbscript:, and inputs containing whitespace or
+ * control characters that browsers strip during URL parsing (e.g. "/\t/evil.com",
+ * which would otherwise collapse to "//evil.com"). Validates the final parsed
+ * origin against a placeholder base to catch any normalization escape.
  */
 export function safeRedirectPath(
   value: string | null | undefined,
   fallback: string = "/",
 ): string {
   if (typeof value !== "string" || value.length === 0) return fallback;
+
+  // Reject ASCII control characters and whitespace (including \t, \n, \r) which
+  // browsers strip during URL parsing and can be used to bypass naive prefix
+  // checks (e.g. "/%09/evil.com" decodes to "/\t/evil.com" → "//evil.com").
+  // eslint-disable-next-line no-control-regex
+  if (/[\x00-\x20\x7F]/.test(value)) return fallback;
 
   // Must be a path beginning with a single forward slash.
   if (value[0] !== "/") return fallback;
@@ -110,5 +118,15 @@ export function safeRedirectPath(
     return fallback;
   }
 
-  return value;
+  // Final defense in depth: resolve against a placeholder origin and confirm
+  // the parsed origin did not escape. Catches any normalization quirk the
+  // static checks miss.
+  try {
+    const base = "https://redirect.invalid";
+    const parsed = new URL(value, base);
+    if (parsed.origin !== base) return fallback;
+    return parsed.pathname + parsed.search + parsed.hash;
+  } catch {
+    return fallback;
+  }
 }
