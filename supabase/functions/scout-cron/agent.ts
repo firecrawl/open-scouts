@@ -19,6 +19,47 @@ import {
   trackDuplicateDetected,
 } from "./posthog.ts";
 
+
+/**
+ * Splits and sends long messages to Telegram to avoid 4096 char limit
+ */
+async function sendTelegramNotification(scout: Scout, scoutResponse: ScoutResponse) {
+  const token = Deno.env.get("TELEGRAM_BOT_TOKEN");
+  const chatId = Deno.env.get("TELEGRAM_CHAT_ID");
+
+  if (!token || !chatId) {
+    console.warn("[Telegram] Credentials missing. Skipping.");
+    return;
+  }
+
+  const fullText = `🚀 <b>${scout.title}</b>\n\n${scoutResponse.response}`;
+  const MAX_LENGTH = 4000;
+  let remainingText = fullText;
+
+  while (remainingText.length > 0) {
+    let chunk = remainingText.substring(0, MAX_LENGTH);
+    if (remainingText.length > MAX_LENGTH) {
+      const lastNewline = chunk.lastIndexOf('\n');
+      if (lastNewline > MAX_LENGTH - 500) {
+        chunk = remainingText.substring(0, lastNewline);
+      }
+    }
+
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: chunk,
+        parse_mode: "HTML",
+      }),
+    });
+
+    remainingText = remainingText.substring(chunk.length).trim();
+    if (remainingText.length > 0) await new Promise(r => setTimeout(r, 200));
+  }
+}
+
 // Calculate cosine similarity between two vectors
 function cosineSimilarity(vecA: number[], vecB: number[]): number {
   if (vecA.length !== vecB.length) {
@@ -674,18 +715,32 @@ REMINDER: Write your final response like a NEWS BRIEF. DO NOT mention your proce
           })
           .eq("id", executionId);
 
-        // Send email notification if scout was successful AND not a duplicate
+        const notificationChannel = Deno.env.get("NOTIFICATION_CHANNEL") || "email";
+
         if (scoutResponse.taskCompleted && !isDuplicate) {
-          console.log(`Scout found results, sending email notification...`);
-          try {
-            await sendScoutSuccessEmail(scout, scoutResponse, supabase);
-            trackEmailNotificationSent(scout.user_id, scout.id, executionId, scout.title, true);
-          } catch (emailError: any) {
-            console.error(`Failed to send email notification:`, emailError.message);
-            trackEmailNotificationSent(scout.user_id, scout.id, executionId, scout.title, false, emailError.message);
+          console.log(`Scout found results. Channel: ${notificationChannel}`);
+          
+          const shouldSendEmail = notificationChannel === "email" || notificationChannel === "both";
+          const shouldSendTelegram = notificationChannel === "telegram" || notificationChannel === "both";
+
+          if (shouldSendEmail) {
+            try {
+              await sendScoutSuccessEmail(scout, scoutResponse, supabase);
+              trackEmailNotificationSent(scout.user_id, scout.id, executionId, scout.title, true);
+            } catch (e) {
+              console.error("[Email] Failed:", e.message);
+            }
           }
-        } else if (isDuplicate) {
-          console.log(`📧 Skipping email notification - result is too similar to a previous finding`);
+
+          if (shouldSendTelegram) {
+            try {
+              await sendTelegramNotification(scout as Scout, scoutResponse);
+              // We reuse the tracking event or you can add trackTelegramNotificationSent
+              console.log("[Telegram] Notification sent");
+            } catch (e) {
+              console.error("[Telegram] Failed:", e.message);
+            }
+          }
         }
 
         // Track execution completed
