@@ -2,6 +2,51 @@
 
 import { isBlacklistedDomain } from "./constants.ts";
 
+/**
+ * Resolve the web-data API base URL (additive, optional).
+ *
+ * Because fastCRW is a Firecrawl-compatible web scraper (single binary;
+ * self-host or cloud), the same raw fetch calls can target it by overriding the
+ * base URL via CRW_API_URL (cloud default: https://fastcrw.com/api; self-host:
+ * e.g. http://localhost:3000). When unset, the hard-coded Firecrawl URLs are
+ * used and behavior is identical to before.
+ */
+function getApiBaseUrl(): string | null {
+  return Deno.env.get("CRW_API_URL")?.replace(/\/+$/, "") || null;
+}
+
+/**
+ * Resolve the API key to use for a request.
+ *
+ * The per-user key (custom > auto-generated, resolved upstream in helpers.ts and
+ * passed in as `apiKey`) always takes priority. CRW_API_KEY from the environment
+ * is only used as a fallback when no per-user key is provided, so existing
+ * per-user key-priority logic is fully preserved.
+ */
+function resolveApiKey(apiKey: string): string {
+  return apiKey || Deno.env.get("CRW_API_KEY") || "";
+}
+
+/**
+ * Build the search endpoint URL. When CRW_API_URL is set, fastCRW exposes a
+ * Firecrawl-compatible /v1/search; otherwise fall back to the hard-coded
+ * Firecrawl v2 endpoint.
+ */
+function getSearchEndpoint(): string {
+  const baseUrl = getApiBaseUrl();
+  return baseUrl ? `${baseUrl}/v1/search` : "https://api.firecrawl.dev/v2/search";
+}
+
+/**
+ * Build the scrape endpoint URL. When CRW_API_URL is set, fastCRW exposes a
+ * Firecrawl-compatible /v1/scrape; otherwise fall back to the hard-coded
+ * Firecrawl v2 endpoint.
+ */
+function getScrapeEndpoint(): string {
+  const baseUrl = getApiBaseUrl();
+  return baseUrl ? `${baseUrl}/v1/scrape` : "https://api.firecrawl.dev/v2/scrape";
+}
+
 // Execute web search using Firecrawl
 export async function executeSearchTool(args: any, apiKey: string, location?: string, maxAge?: number) {
   try {
@@ -36,10 +81,10 @@ export async function executeSearchTool(args: any, apiKey: string, location?: st
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000);
 
-    const response = await fetch("https://api.firecrawl.dev/v2/search", {
+    const response = await fetch(getSearchEndpoint(), {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${apiKey}`,
+        "Authorization": `Bearer ${resolveApiKey(apiKey)}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(searchPayload),
@@ -114,10 +159,10 @@ export async function executeScrapeTool(args: any, apiKey: string, maxAge?: numb
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000);
 
-    const response = await fetch("https://api.firecrawl.dev/v2/scrape", {
+    const response = await fetch(getScrapeEndpoint(), {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${apiKey}`,
+        "Authorization": `Bearer ${resolveApiKey(apiKey)}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(scrapePayload),
