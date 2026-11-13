@@ -2,7 +2,7 @@ const MARKDOWN_TERMS = `# TERMS OF USE / SERVICE AGREEMENT
 
 Date of last revision: November 5, 2024
 
-This terms of use or service agreement (“Agreement”) is between SideGuide Technologies, Inc. d/b/a Firecrawl, a Delaware Corporation (“Firecrawl,” “Company,” “we,” “us,” “our,” or “ourselves”) and the person or entity (“you” or “your”) that has decided to use our services; any of our websites or apps; or any features, products, graphics, text, images, photos, audio, video, location data, computer code, and all other forms of data and communications (collectively, “Services”).
+This terms of use or service agreement (“Agreement”) is between SideGuide Technologies Inc. d/b/a Firecrawl, a Delaware Corporation (“Firecrawl,” “Company,” “we,” “us,” “our,” or “ourselves”) and the person or entity (“you” or “your”) that has decided to use our services; any of our websites or apps; or any features, products, graphics, text, images, photos, audio, video, location data, computer code, and all other forms of data and communications (collectively, “Services”).
 
 YOU MUST CONSENT TO THIS AGREEMENT TO USE OUR SERVICES. If you do not accept and agree to be bound by all of the terms of this Agreement, including the Privacy Policy, posted at <https://www.firecrawl.dev/privacy-policy> and incorporated by reference herein, you cannot use Services.
 
@@ -219,7 +219,7 @@ Date of last revision: December 26, 2024
 
 1. **Who We Are?**
 
-The name of our company is SideGuide Technologies, Inc. d/b/a Firecrawl (“Firecrawl”), and we're registered as a corporation in Delaware. Firecrawl is a tool for collecting and enhancing LLM-ready data.
+The name of our company is SideGuide Technologies Inc. d/b/a Firecrawl (“Firecrawl”), and we're registered as a corporation in Delaware. Firecrawl is a tool for collecting and enhancing LLM-ready data.
 
 2. **What Is This?** 
 
