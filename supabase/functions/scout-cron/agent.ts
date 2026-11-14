@@ -1,6 +1,6 @@
 // Main agent orchestration logic
 
-import type { Scout, ScoutResponse } from "./types.ts";
+import type { Scout, ScoutResponse, ScrapeOptions } from "./types.ts";
 import { getMaxAge, isBlacklistedDomain } from "./constants.ts";
 import {
   createStep,
@@ -9,7 +9,7 @@ import {
   logFirecrawlUsage,
   markFirecrawlKeyInvalid,
 } from "./helpers.ts";
-import { executeSearchTool, executeScrapeTool } from "./tools.ts";
+import { executeSearchTool, executeScrapeTool, FirecrawlOptions } from "./tools.ts";
 import { sendScoutSuccessEmail } from "./email.ts";
 import {
   trackExecutionStarted,
@@ -382,6 +382,16 @@ REMINDER: Write your final response like a NEWS BRIEF. DO NOT mention your proce
           let toolResult: any;
           let hasError = false;
 
+          // Build Firecrawl options from scout's scrape_options
+          const firecrawlOptions: FirecrawlOptions | undefined = scout.scrape_options
+            ? {
+                cookies: scout.scrape_options.cookies,
+                headers: scout.scrape_options.headers,
+                waitFor: scout.scrape_options.waitFor,
+                timeout: scout.scrape_options.timeout,
+              }
+            : undefined;
+
           // Execute the tool
           try {
             if (toolName === "searchWeb") {
@@ -389,10 +399,10 @@ REMINDER: Write your final response like a NEWS BRIEF. DO NOT mention your proce
               const locationToUse = scout.location?.city && scout.location.city !== "any"
                 ? scout.location.city
                 : undefined;
-              toolResult = await executeSearchTool(toolArgs, FIRECRAWL_API_KEY, locationToUse, maxAgeMs);
+              toolResult = await executeSearchTool(toolArgs, FIRECRAWL_API_KEY, locationToUse, maxAgeMs, firecrawlOptions);
               firecrawlApiCallsCount++;
             } else if (toolName === "scrapeWebsite") {
-              toolResult = await executeScrapeTool(toolArgs, FIRECRAWL_API_KEY, maxAgeMs);
+              toolResult = await executeScrapeTool(toolArgs, FIRECRAWL_API_KEY, maxAgeMs, firecrawlOptions);
               firecrawlApiCallsCount++;
             }
 
